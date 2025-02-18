@@ -1,0 +1,209 @@
+service: devUtility
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  environment:
+    USER_POOL_ID: us-east-1_14RoJ7vC0
+    CLIENT_ID: 3rqh8q2if67buds1dsupq69q8h
+    CLIENT_SECRET: b3bccnricnp8qlfq9r143bcb2qc9u7ees8h2ef7bob1lf09v9up
+    DYNAMO_TABLE_NAME: WebSocketConnections
+    QUEUE_URL: !Ref JobQueue # Fixed environment variable
+    DB_HOST: database-1.cxkowi4ywvhy.us-east-1.rds.amazonaws.com
+    DB_USER: admin
+    DB_PASS: 123456Varun
+    DB_NAME: varundb
+  
+  vpc:
+    securityGroupIds:
+      - sgr-044de5f05175ebfe8
+    subnetIds:
+      - subnet-00d8afd04b3e37ff6
+      - subnet-0435344a9eb147107
+
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - ses:*
+          Resource: "*"
+        - Effect: Allow
+          Action:
+            - s3:PutObject
+            - s3:GetObject
+          Resource: "arn:aws:s3:::html-to-pdf-gavoor234/*"
+        - Effect: Allow
+          Action: 
+            - dynamodb:PutItem
+            - dynamodb:DeleteItem
+            - dynamodb:Scan
+          Resource: "arn:aws:dynamodb:us-east-1:850995570535:table/WebSocketConnections"
+        - Effect: Allow
+          Action:
+            - sqs:SendMessage
+            - sqs:ReceiveMessage
+            - sqs:DeleteMessage
+            - sqs:GetQueueAttributes
+          Resource: !GetAtt JobQueue.Arn
+
+functions:
+  sendEmail:
+    handler: handlers/sendEmail.sendEmail
+    events:
+      - http:
+          method: post
+          path: send-email
+          cors: true
+  
+  uploadDoc:
+    handler: handlers/uploadDoc.uploadDoc
+    timeout: 10
+    events:
+      - http:
+          method: post
+          path: upload-s3
+          cors: true
+  
+  getFile:
+    handler: handlers/getFile.getFile
+    events:
+      - http:
+          method: get
+          path: get-file
+          cors: true
+          request:
+            parameters:
+              querystrings:
+                fileName: true
+  
+  connectionHandler:
+    handler: handlers/webSocket.connect
+    events:
+      - websocket:
+          route: $connect
+  
+  disconnectHandler:
+    handler: handlers/webSocket.disconnect
+    events:
+      - websocket:
+          route: $disconnect
+  
+  messageHandler:
+    handler: handlers/webSocket.message
+    events:
+      - websocket:
+          route: sendMessage
+
+  signUpUser:
+    handler: handlers/cognito.signUp
+    events:
+      - http:
+          path: signup
+          method: post
+          cors: true
+  
+  confirmUser:
+    handler: handlers/cognito.confirmUser
+    events:
+      - http:
+          path: confirm
+          method: post
+          cors: true
+
+  signIn:
+    handler: handlers/cognito.signIn
+    events:
+      - http:
+          path: sign-in
+          method: post
+          cors: true
+        
+  jobProducer:
+    handler: handlers/produceJob.produceJob
+    events:
+      - http:
+          path: send-job
+          method: post
+          cors: true
+
+  jobWorker:
+    handler: handlers/produceJob.processJob
+    events:
+      - sqs:
+          arn: !GetAtt JobQueue.Arn
+          batchSize: 5 # Fixed indentation
+  
+  processCsv:
+    handler: handlers/produceJob.handler
+    events:
+      - s3:
+          bucket: csv-upload-bucket
+          event: s3:ObjectCreated:*
+  
+  connectToDB:
+    handler: handlers/connectToDB.handler
+    timeout: 10
+    memorySize: 512
+    events:
+      - http:
+          path: connect-db
+          method: get
+
+  exports:
+    handler: handlers/conversion.handler
+    events:
+      - http:
+          path: export
+          method: post
+          cors: true
+
+  processCsvApi:
+    handler: handlers/insertDB.processCsvApi
+    events:
+      - http:
+          path: process-csv
+          method: post
+  
+  resendOtp:
+    handler: handlers/cognito.resendOtp
+    events:
+      - http:
+          path: resend-otp
+          method: post
+          cors: true
+
+
+resources:
+  Resources:
+    WebSocketConnections:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: WebSocketConnections
+        AttributeDefinitions: 
+          - AttributeName: ConnectionId  
+            AttributeType: S
+        KeySchema:
+          - AttributeName: ConnectionId 
+            KeyType: HASH
+        BillingMode: PAY_PER_REQUEST
+
+    JobQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: JobQueue
+
+    CsvDataTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: CsvDataTable
+        AttributeDefinitions: # Fixed spelling error here
+          - AttributeName: id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        BillingMode: PAY_PER_REQUEST
+
+plugins:
+  - serverless-offline
