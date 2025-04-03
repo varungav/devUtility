@@ -47,7 +47,23 @@ module.exports.handler = async(event) => {
             statusCode: 200,
             body: JSON.stringify({message: "Accessed the token.", user: decoded}),
         };
-    } catch(Err) {
+    }
+        /* {
+        This is the sample output how it will be shown
+    "message": "Accessed the token.",
+    "user": {
+        "header": { "alg": "RS256", "typ": "JWT" },
+        "payload": {
+            "sub": "1234567890",
+            "email": "testuser@example.com",
+            "exp": 1712234567,
+            "iss": "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_example",
+            "aud": "client_id_12345"
+        }
+    }
+} */
+
+    catch(Err) {
         console.log("Error Found: ", Err);
         return {
             statusCode: 500,
